@@ -134,7 +134,7 @@ Resource.RcvBuffer(1).rowsPerFrame = P.num_rays * P.num_angles * P.num_pulses * 
 Resource.RcvBuffer(1).colsPerFrame = Resource.Parameters.numRcvChannels;
 Resource.RcvBuffer(1).numFrames = P.num_rf_frames;
 
-RcvProfile.LnaZinSel = 31; % turn on high Z-state, increase sensitivity
+% RcvProfile.LnaZinSel = 31; % turn on high Z-state, increase sensitivity
 
 %% Timing parameters
 P.num_tx_per_frame = P.num_accumulations * P.num_angles * P.num_pulses * P.num_rays;
