@@ -11,7 +11,7 @@
 %   03/11/2023 - Rick Waasdorp (r.waasdorp@tudelft.nl) (Beamforming xBmode)
 %   25/03/2022 - Baptiste Heiles (Angles)
 
-clear all % need for persistence
+clear all %#ok<CLALL> 
 format compact
 close all
 
@@ -22,29 +22,26 @@ addpath('dependencies/sequence')
 addpath('dependencies/utilities')
 addpath('dependencies/utilities/save')
 
-DEBUG = 0;
-
 %% =============================================================================
 % SETUP ACQUISITION PARAMETERS
 % ==============================================================================
 P.image_start_depth_mm = 0; % start depth [mm]
 P.image_end_depth_mm = 10; % end depth [mm]
 
-P.num_accumulations = 1; % if >1, will accumulate RF data on the device. Keep low to avoid clipping!
-P.xwave_angles = [7.5 15.5]; % Ensemble of xWave angles in degrees
+P.num_accumulations = 1; % if >1, will accumulate RF data on the device. Keep low to avoid clipping! Lowers max FPS!
+P.xwave_angles = [7.5 15.5]; % Ensemble of xWave angles in degrees, one or multiple angles
 
-P.speed_of_sound = 1480; % default 1480 m/s, CIRS phantom 1540 m/s
-P.image_start_voltage = 3; % set to safe number to avoid collapse
+P.speed_of_sound = 1480; % agar/water 1480 m/s, tissue 1540 m/s
+P.image_voltage = 2.5; % set to safe number to avoid collapse
 
-P.aperture_size_min = 63; % min number of elements in active aperture (33 for wide FOV)
+P.aperture_size_min = 33; % min number of elements in active aperture (33 for wide FOV)
 P.aperture_size_max = 64; % max number of elements in active aperture
 
 P.save_path = 'data'; % default path for data saving
 
 P.transmit_apodization = 'tukey'; % Apodization to avoid edge waves. Options: none/kaiser/hamming/tukey
-P.beamform_image_modes = {'PW', 'xBmode', 'xAM'}; % PW = bf(\)+bf(/), xBmode = bf(X), xAM = bf(X-\-/)
-P.transmit_frequency = 15.6250; % transducer transmit frequency [MHz]
 P.fps = 2; % acquisition frame rate in [Hz]
+
 
 %% =============================================================================
 % TRANSDUCER PARAMETERS
@@ -52,6 +49,7 @@ P.fps = 2; % acquisition frame rate in [Hz]
 
 % Define Trans structure array
 Trans.name = 'L22-14vX';
+% Trans.name = 'L11-5v';
 Trans.units = 'mm';
 Trans = computeTrans(Trans);
 
@@ -64,74 +62,79 @@ Resource.Parameters.numRcvChannels = Trans.numelements; % number of receive chan
 Resource.Parameters.speedOfSound = P.speed_of_sound; % speed of sound [m/s]
 Resource.Parameters.verbose = 1; % controls output warnings
 Resource.Parameters.speedCorrectionFactor = 1.0;
-Resource.Parameters.simulateMode = 0; %0; simulation onn [1] simulation off [0]
+Resource.Parameters.simulateMode = 0; % 0; simulation onn [1] simulation off [0]
 Resource.Parameters.fakeScanhead = 0;
 Resource.VDAS.dmaTimeout = 1000 * 4; % 4 seconds
 Resource.Parameters.waitForProcessing = 1;
 
 % Compute and set dependent parameters
 
-% some additional dependent parameters
-P.scale_wvl2mm = (Resource.Parameters.speedOfSound / Trans.frequency) * 1e-3; % length of 1 wavelength in mm
-P.scale_mm2wvl = Trans.frequency / (Resource.Parameters.speedOfSound / 1000); %wavelength per mm
-P.num_angles = numel(P.xwave_angles);
-
-P.samples_per_wavelength = 4; % 4 samples per wavelength, hardcoded
-P.num_pulses = 3; % number of pulses in xAM pulse sequence, hardcoded
-P.timetag_enabled = 1; % debug option, see time tags of frames
-P.num_rf_frames = 4; % must be >4 or even number, don't change
-
 % Advanced options
 P.use_adaptive_xwave_angle = true; % if true updates the xWave Angles dependent on the  imaging depth
 P.use_half_pitch_scanning = true; %
+P.transmit_frequency = Trans.frequency; % transducer transmit frequency [MHz]
+
+P.num_pulses = 3; % number of pulses in xAM pulse sequence, hardcoded
+P.timetag_enabled = 1; % debug option, see time tags of frames
+P.num_rf_frames = 4; % must be >4 or even number, don't change
+P.beamform_image_modes = {'PW', 'xBmode', 'xAM'}; % PW = bf(\)+bf(/), xBmode = bf(X), xAM = bf(X-\-/)
 
 % choose rays for pitch or pitch/2 scanning
 step = 1 / (P.use_half_pitch_scanning + 1);
 P.half_aperture_size = (P.aperture_size_min - rem(P.aperture_size_min, 2)) / 2; % number of active elements in half transmit aperture
 P.ray_positions = ceil(P.aperture_size_min / 2) + 1:step:Resource.Parameters.numTransmit - floor(P.aperture_size_min / 2); % pitch scanning
+P.ray_positions_mm = interp1(1:Trans.numelements, Trans.ElementPos(:,1), P.ray_positions);
 P.num_rays = numel(P.ray_positions);
 
 % warn user about max angle used
 if P.use_adaptive_xwave_angle
-    P.max_image_depth = (P.aperture_size_max * Trans.spacingMm * 1e-3) / 2 * cotd(max(P.xwave_angles)) *1e3;
+    P.max_image_depth = (P.aperture_size_max * Trans.spacingMm * 1e-3) / 2 * cotd(max(P.xwave_angles));
     if P.max_image_depth < P.image_end_depth_mm * 1e-3
         warning('Imaging depth too high for combination of angles. Max depth of intersecting xWave is %.2fmm. Either\n - Decrease imaging depth\n - Set P.use_adaptive_xwave_angle to false\n - Dont trust xAM results below %.2fmm\n - Decrease the max angle', P.max_image_depth * 1e3, P.max_image_depth * 1e3)
     end
 end
-if P.num_rf_frames < 4; error('num_rf_frames must be larger than 4'); end
+assert(P.num_rf_frames >= 4, 'num_rf_frames must be larger than 4');
+
+% some additional dependent parameters
+P.scale_wvl2mm = (Resource.Parameters.speedOfSound / Trans.frequency) * 1e-3; % length of 1 wavelength in mm
+P.scale_mm2wvl = Trans.frequency / (Resource.Parameters.speedOfSound / 1000); %wavelength per mm
+P.num_angles = numel(P.xwave_angles);
 
 % specify Media object
 pt1;
 Media.function = 'movePoints';
 
-
 %% =============================================================================
 % INPUT VALIDATION
 % ==============================================================================
-
 assert(P.image_end_depth_mm >= P.image_start_depth_mm, 'Image end depth must be larger than start depth. Recommended start = 0, end = 10mm')
-
+assert(P.aperture_size_min < P.aperture_size_max, 'Min aperture size must be smaller than max aperture size. Recommended min = 33, max = 64')
 
 
 %% =============================================================================
 % RESOURE BUFFERS
 % ==============================================================================
 
-% Specify Resources
-% Buf len = distance from edge of aperture to max depth
-maxAcqLength = ceil(sqrt(P.image_end_depth_mm ^ 2 + ((Trans.numelements - 1) * Trans.spacingMm) ^ 2)); % [mm]
-samples_per_mm = (Trans.frequency * P.samples_per_wavelength) / Resource.Parameters.speedOfSound * 1e3;
-wavelength_mm = Resource.Parameters.speedOfSound / Trans.frequency * 1e-3; % [mm]
-z_delta_mm = wavelength_mm * 0.5; % space between rows of beamform image grid [mm]
-maxAcqLengthWvl = round(maxAcqLength * P.scale_mm2wvl);
-P.Nz_RF = (ceil(maxAcqLengthWvl * 2 * P.samples_per_wavelength / 128) * 128);
+% determine demod frequency, and compute Nz_RF
+TxFreq = 250 ./ (2 .* ((6:197).'));
+TxFreqValid = TxFreq(2 .* TxFreq < 3.5 & TxFreq > 1.5); % depends on Trans.Bandwidth [1.5 3.5] for P4-1
+demodFreqsValid = TxFreq(rem(250, TxFreq * 4) == 0);
+[~,idx] = min(abs(Trans.frequency - demodFreqsValid));
+demodFrequency = demodFreqsValid(idx);
+% fprintf('\tTX    FREQ: %.3f MHz\n', Trans.frequency)
+% fprintf('\tDEMOD FREQ: %.3f MHz\n', demodFrequency)
 
+maxAcqLength = ceil(sqrt(P.image_end_depth_mm ^ 2 + ((Trans.numelements - 1) * Trans.spacingMm) ^ 2)); % [mm]
+maxAcqLengthWvl = maxAcqLength * P.scale_mm2wvl;
+P.Nz_RF = (ceil(maxAcqLengthWvl * 2 * 4 * demodFrequency / Trans.frequency / 128) * 128); %2*4*enddepth*factor (beam forming factor)
+
+% allocate resources
 Resource.RcvBuffer(1).datatype = 'int16';
 Resource.RcvBuffer(1).rowsPerFrame = P.num_rays * P.num_angles * P.num_pulses * P.Nz_RF;
 Resource.RcvBuffer(1).colsPerFrame = Resource.Parameters.numRcvChannels;
 Resource.RcvBuffer(1).numFrames = P.num_rf_frames;
 
-RcvProfile.LnaZinSel = 31;
+RcvProfile.LnaZinSel = 31; % turn on high Z-state, increase sensitivity
 
 %% Timing parameters
 P.num_tx_per_frame = P.num_accumulations * P.num_angles * P.num_pulses * P.num_rays;
@@ -160,7 +163,7 @@ TX = repmat(struct('waveform', 1, ...
     'Delay', zeros(1, Trans.numelements)), ...
     1, P.num_pulses * P.num_angles * P.num_rays);
 
-TPC.hv = P.image_start_voltage;
+TPC.hv = P.image_voltage;
 
 % Specify Receive structure arrays.
 P.use_accumulation = P.num_accumulations > 1;
@@ -314,28 +317,28 @@ nsc = length(SeqControl) + 1;
 n = 1;
 
 Event(n).info = 'initialize beamformer';
-Event(n).tx = 0; % no transmit
-Event(n).rcv = 0; % no rcv
-Event(n).recon = 0; % reconstruction
-Event(n).process = [PN.image_reconstruct_init, PN.image_display]; % process
-Event(n).seqControl = SC.matlab; %4;
+Event(n).tx = 0;
+Event(n).rcv = 0;
+Event(n).recon = 0;
+Event(n).process = [PN.image_reconstruct_init, PN.image_display];
+Event(n).seqControl = SC.matlab;
 n = n + 1;
 
 % save acquisition paramters
 Event(n).info = 'saveAcqPars';
-Event(n).tx = 0; % no transmit
-Event(n).rcv = 0; % no rcv
-Event(n).recon = 0; % reconstruction
-Event(n).process = PN.saveAcqPars; % process
-Event(n).seqControl = SC.matlab; %4;
+Event(n).tx = 0;
+Event(n).rcv = 0;
+Event(n).recon = 0;
+Event(n).process = PN.saveAcqPars;
+Event(n).seqControl = SC.matlab;
 n = n + 1;
 
 Event(n).info = 'enter freeze and stop hardware';
-Event(n).tx = 0; % no transmit
-Event(n).rcv = 0; % no rcv
-Event(n).recon = 0; % reconstruction
-Event(n).process = 0; %PN.startFreeze; % process
-Event(n).seqControl = [SC.matlab, SC.stop]; %4;
+Event(n).tx = 0;
+Event(n).rcv = 0;
+Event(n).recon = 0;
+Event(n).process = 0;
+Event(n).seqControl = [SC.matlab, SC.stop];
 n = n + 1;
 
 % EN.startDop = n;
@@ -346,27 +349,27 @@ for idx_frame = 1:P.num_rf_frames
     for idx_ray = 1:P.num_rays % 1st set of acquisitions
         for idx_angle = 1:P.num_angles
             idx_TX = idx_angle + (idx_ray - 1) * P.num_angles;
-            Event(n).info = ['Acquire cross ray line ', num2str(idx_ray), ' angle ', num2str(idx_angle), ' frame ' num2str(idx_frame)];
-            Event(n).tx = idx_TX; % use next TX structure.
-            Event(n).rcv = idx_TX + (idx_frame - 1) * nRcvObj_p_accum; % use next receive structure
-            Event(n).recon = 0; % no reconstruction.
-            Event(n).process = 0; % no processing
+            Event(n).info = sprintf('Acquire X R%03i A%02i F%02i', idx_ray, idx_angle, idx_frame);
+            Event(n).tx = idx_TX;
+            Event(n).rcv = idx_TX + (idx_frame - 1) * nRcvObj_p_accum;
+            Event(n).recon = 0;
+            Event(n).process = 0;
             Event(n).seqControl = SC.ttna; % Time between acquisitions
             n = n + 1;
 
-            Event(n).info = ['Acquire right ray line ', num2str(idx_ray), ' angle ', num2str(idx_angle), ' frame ' num2str(idx_frame)];
-            Event(n).tx = idx_TX + P.num_rays * P.num_angles; % use next TX structure.
-            Event(n).rcv = idx_TX + P.num_rays * P.num_angles + (idx_frame - 1) * nRcvObj_p_accum; % use next receive structure
-            Event(n).recon = 0; % no reconstruction.
-            Event(n).process = 0; % no processing
+            Event(n).info = sprintf('Acquire R R%03i A%02i F%02i', idx_ray, idx_angle, idx_frame);
+            Event(n).tx = idx_TX + P.num_rays * P.num_angles;
+            Event(n).rcv = idx_TX + P.num_rays * P.num_angles + (idx_frame - 1) * nRcvObj_p_accum;
+            Event(n).recon = 0;
+            Event(n).process = 0;
             Event(n).seqControl = SC.ttna; % Time between acquisitions
             n = n + 1;
 
-            Event(n).info = ['Acquire left ray line ', num2str(idx_ray), ' angle ', num2str(idx_angle), ' frame ' num2str(idx_frame)];
-            Event(n).tx = idx_TX + 2 * P.num_rays * P.num_angles; % use next TX structure.
-            Event(n).rcv = idx_TX + 2 * P.num_rays * P.num_angles + (idx_frame - 1) * nRcvObj_p_accum; % use next receive structure
-            Event(n).recon = 0; % no reconstruction.
-            Event(n).process = 0; % no processing
+            Event(n).info = sprintf('Acquire L R%03i A%02i F%02i', idx_ray, idx_angle, idx_frame);
+            Event(n).tx = idx_TX + 2 * P.num_rays * P.num_angles;
+            Event(n).rcv = idx_TX + 2 * P.num_rays * P.num_angles + (idx_frame - 1) * nRcvObj_p_accum;
+            Event(n).recon = 0;
+            Event(n).process = 0;
             Event(n).seqControl = SC.ttna; % Time between acquisitions
             n = n + 1;
         end
@@ -395,36 +398,36 @@ for idx_frame = 1:P.num_rf_frames
         n = n + 1;
 
         nstart = n;
-        % and accumulate acqs
+
+        % and accumulation acqs
         for idx_ray = 1:P.num_rays % 1st set of acquisitions
             for idx_angle = 1:P.num_angles
                 idx_TX = idx_angle + (idx_ray - 1) * P.num_angles;
-                Event(n).info = ['Acquire cross ray line ', num2str(idx_ray), ' angle ', num2str(idx_angle), ' frame ' num2str(idx_frame), ' accum'];
-                Event(n).tx = idx_TX; % use next TX structure.
+                Event(n).info = sprintf('Acquire X R%03i A%02i F%02i accum', idx_ray, idx_angle, idx_frame);
+                Event(n).tx = idx_TX;
                 Event(n).rcv = idx_TX + nRcvObj_p_accum * P.num_rf_frames + (idx_frame - 1) * nRcvObj_p_accum; % use next receive structure
-                Event(n).recon = 0; % no reconstruction.
-                Event(n).process = 0; % no processing
+                Event(n).recon = 0;
+                Event(n).process = 0;
                 Event(n).seqControl = SC.ttna; % Time between acquisitions
                 n = n + 1;
 
-                Event(n).info = ['Acquire right ray line ', num2str(idx_ray), ' angle ', num2str(idx_angle), ' frame ' num2str(idx_frame), ' accum'];
-                Event(n).tx = idx_TX + P.num_rays * P.num_angles; % use next TX structure.
+                Event(n).info = sprintf('Acquire R R%03i A%02i F%02i accum', idx_ray, idx_angle, idx_frame);
+                Event(n).tx = idx_TX + P.num_rays * P.num_angles;
                 Event(n).rcv = idx_TX + nRcvObj_p_accum * P.num_rf_frames + P.num_rays * P.num_angles + (idx_frame - 1) * nRcvObj_p_accum; % use next receive structure
-                Event(n).recon = 0; % no reconstruction.
-                Event(n).process = 0; % no processing
+                Event(n).recon = 0;
+                Event(n).process = 0;
                 Event(n).seqControl = SC.ttna; % Time between acquisitions
                 n = n + 1;
 
-                Event(n).info = ['Acquire left ray line ', num2str(idx_ray), ' angle ', num2str(idx_angle), ' frame ' num2str(idx_frame), ' accum'];
-                Event(n).tx = idx_TX + 2 * P.num_rays * P.num_angles; % use next TX structure.
+                Event(n).info = sprintf('Acquire L R%03i A%02i F%02i accum', idx_ray, idx_angle, idx_frame);
+                Event(n).tx = idx_TX + 2 * P.num_rays * P.num_angles;
                 Event(n).rcv = idx_TX + nRcvObj_p_accum * P.num_rf_frames + 2 * P.num_rays * P.num_angles + (idx_frame - 1) * nRcvObj_p_accum; % use next receive structure
-                Event(n).recon = 0; % no reconstruction.
-                Event(n).process = 0; % no processing
+                Event(n).recon = 0;
+                Event(n).process = 0;
                 Event(n).seqControl = SC.ttna; % Time between acquisitions
                 n = n + 1;
             end
         end
-        %         Event(n - 1).seqControl = SC.ttna_frame; % Time between acquisitions
 
         SeqControl(nsc - 1).argument = n;
         Event(n).info = 'Test loop count - if nz, jmp back to start of accumulates.';
@@ -439,10 +442,10 @@ for idx_frame = 1:P.num_rf_frames
         n = n + 1;
 
         Event(n).info = 'dummy tx';
-        Event(n).tx = 1; % use next TX structure.
-        Event(n).rcv = 0; % use next receive structure
-        Event(n).recon = 0; % no reconstruction.
-        Event(n).process = 0; % no processing
+        Event(n).tx = 1;
+        Event(n).rcv = 0;
+        Event(n).recon = 0;
+        Event(n).process = 0;
         Event(n).seqControl = SC.ttna_frame; % Time between acquisitions
         n = n + 1;
     end
@@ -458,10 +461,10 @@ for idx_frame = 1:P.num_rf_frames
     n = n + 1;
 
     Event(n).info = 'waitForTransferComplete';
-    Event(n).tx = 0; % no transmit
-    Event(n).rcv = 0; % no rcv
-    Event(n).recon = 0; % reconstruction
-    Event(n).process = 0; % process
+    Event(n).tx = 0;
+    Event(n).rcv = 0;
+    Event(n).recon = 0;
+    Event(n).process = 0;
     Event(n).seqControl = nsc; % waitForTransferComplete
     n = n + 1;
     % set waitTransfer to reference last SeqControl
@@ -470,18 +473,18 @@ for idx_frame = 1:P.num_rf_frames
     nsc = nsc + 1;
 
     Event(n).info = 'Image Reconstruct';
-    Event(n).tx = 0; % no transmit
-    Event(n).rcv = 0; % no rcv
-    Event(n).recon = 0; % no reconstruction
-    Event(n).process = PN.image_reconstruct; % external processing function
+    Event(n).tx = 0;
+    Event(n).rcv = 0;
+    Event(n).recon = 0;
+    Event(n).process = PN.image_reconstruct;
     Event(n).seqControl = 0; %
     n = n + 1;
 
     Event(n).info = 'markTransferProcessed';
-    Event(n).tx = 0; % no transmit
-    Event(n).rcv = 0; % no rcv
-    Event(n).recon = 0; % reconstruction
-    Event(n).process = 0; % process
+    Event(n).tx = 0;
+    Event(n).rcv = 0;
+    Event(n).recon = 0;
+    Event(n).process = 0;
     Event(n).seqControl = nsc; % markTransferProcessed
     n = n + 1;
     % set waitTransfer to reference last SeqControl
@@ -489,36 +492,21 @@ for idx_frame = 1:P.num_rf_frames
     SeqControl(nsc).argument = nsc - 2;
     nsc = nsc + 1;
 
-    %         Event(n).info = 'sync';
-    %         Event(n).tx = 0; % no transmit
-    %         Event(n).rcv = 0; % no rcv
-    %         Event(n).recon = 0; % reconstruction
-    %         Event(n).process = 0; % process
-    %         Event(n).seqControl = SC.sync; % markTransferProcessed
-    %         n=n+1;
-
     Event(n).info = 'Image Display';
-    Event(n).tx = 0; % no transmit
-    Event(n).rcv = 0; % no rcv
-    Event(n).recon = 0; % no reconstruction
-    Event(n).process = PN.image_display; % external processing function
+    Event(n).tx = 0;
+    Event(n).rcv = 0;
+    Event(n).recon = 0;
+    Event(n).process = PN.image_display;
     Event(n).seqControl = SC.matlab; %
     n = n + 1;
-
-    %     Event(n).info = 'matlab';
-    %     Event(n).tx = 0; % no transmit
-    %     Event(n).rcv = 0; % no rcv
-    %     Event(n).recon = 0; % reconstruction
-    %     Event(n).process = 0; % process
-    %     Event(n).seqControl = [SC.matlab, SC.sync]; %
 
 end
 
 Event(n).info = 'Jump back to AcquisitionLoop.';
-Event(n).tx = 0; % no transmit
-Event(n).rcv = 0; % no rcv
-Event(n).recon = 0; % no reconstruction
-Event(n).process = 0; % no process
+Event(n).tx = 0;
+Event(n).rcv = 0;
+Event(n).recon = 0;
+Event(n).process = 0;
 Event(n).seqControl = [SC.matlab, SC.jump]; % jump back to Event 1
 n = n + 1;
 
@@ -583,7 +571,7 @@ UI(n_ui).Callback = {'saveDataMenu()'};
 n_ui = n_ui + 1;
 
 % configure saveDataMenu
-P.matfile_file_name = 'xAM_sequence.mat'; filename = P.matfile_file_name;
+P.matfile_file_name = 'xWaveImaging.mat'; filename = P.matfile_file_name;
 SaveDataMenuSettings = saveDataMenu('defaults'); % call with 1 output arg and one input arg to obtain defaults
 SaveDataMenuSettings.filename = P.matfile_file_name;
 SaveDataMenuSettings.custom_figures = {2};
