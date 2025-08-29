@@ -1,0 +1,8 @@
+*.asv
+*.mat
+*.fig
+*.png
+*.jpg
+*.jpeg
+
+dependencies/dev/
