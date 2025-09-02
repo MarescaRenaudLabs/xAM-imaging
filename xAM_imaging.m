@@ -58,8 +58,8 @@ Trans = computeTrans(Trans);
 % SYSTEM PARAMETERS
 % ==============================================================================
 % Define system parameters
-Resource.Parameters.numTransmit = Trans.numelements; % number of transmit channels
-Resource.Parameters.numRcvChannels = Trans.numelements; % number of receive channels
+Resource.Parameters.numTransmit = 128; % number of transmit channels
+Resource.Parameters.numRcvChannels = 128; % number of receive channels
 Resource.Parameters.speedOfSound = P.speed_of_sound; % speed of sound [m/s]
 Resource.Parameters.verbose = 1; % controls output warnings
 Resource.Parameters.speedCorrectionFactor = 1.0;
@@ -549,24 +549,6 @@ UI(n_ui).Control = {'UserC7', 'Style', 'VsSlider', 'Label', 'DR xAM', ...
                         'SliderStep', [0.01, 0.1], 'ValueFormat', '%2.1fdB'};
 UI(n_ui).Callback = {'xw_change_dr(''xam'', UIValue)'};
 n_ui = n_ui + 1;
-
-% button to save data
-% VarsToSave = {
-%               'P';
-%               'Resource';
-%               'Trans';
-%               'TW';
-%               'TX';
-%               'Receive';
-%               'RcvProfile';
-%               'TPC';
-%               'TGC';
-%               'Media';
-%               'UISTATES';
-%               'TT_array_movmean';
-%               };
-% % VarsToSave = [VarsToSave; 'RcvData'];
-% VarsToSave = [VarsToSave; 'IQbf_xam'; 'IQbf_xbmode'];
 
 UI(n_ui).Control = {'UserC1', 'Style', 'VsPushButton', 'Label', 'Save Data'};
 UI(n_ui).Callback = {'saveDataMenu()'};

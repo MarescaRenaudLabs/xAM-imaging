@@ -8,21 +8,12 @@ function varargout = saveDataMenu(varargin)
     % author:  R. Waasdorp (r.waasdorp@tudelft.nl)
     % ==========================================================================
 
-    % TODOS:
-    % [x] figure saving
-    % [x] polish layout
-    % [x] reset location and behaviour
-    % [x] keep open after save?
-    % [ ] RcvBuffer frame selection if multiple frames?
-    % [ ] RcvBuffer skipper?
-    % [ ] add custom vars to GUI?
-
     % variables
     persistent previous_state fig
     filename_field = [];
     folder_field = [];
     checkboxes = struct('vsx_pars', [], 'iqdata', [], 'rcvdata', [], 'figfig', [], ...
-        'figpng', [], 'compression', [], 'rf_to_bin', []);
+        'figpng', [], 'compression', []);
 
     % if called with one input, one output, and 'command', run cli_gateway
     if nargin == 1 && nargout == 1
@@ -123,9 +114,6 @@ function varargout = saveDataMenu(varargin)
         checkboxes.compression = uicheckbox(layout, 'Text', 'Compression');
         set_position(checkboxes.compression, 8, 2);
 
-        checkboxes.rf_to_bin = uicheckbox(layout, 'Text', 'RF to .bin');
-        set_position(checkboxes.rf_to_bin, 9, 2);
-
         % save and cancel
         cancel_button = uibutton(layout, 'Text', 'Reset');
         cancel_button.ButtonPushedFcn = @reset_callback;
@@ -161,8 +149,7 @@ function varargout = saveDataMenu(varargin)
             'rcvdata', 0, ...
             'figfig', 1, ...
             'figpng', 1, ...
-            'compression', 1, ...
-            'rf_to_bin', 0);
+            'compression', 1);
         state.custom_variables = {};
         state.keep_open = true;
     end
@@ -270,13 +257,6 @@ function varargout = saveDataMenu(varargin)
 
         % construct string to save stuff
         vars_to_save = get_vars_to_save();
-        disp(vars_to_save)
-
-        % remove rcvdata if rf to bin file requested (faster save)
-        rf_to_bin = state.checkboxes.rf_to_bin && state.checkboxes.rcvdata;
-        if rf_to_bin
-            vars_to_save(strcmp(vars_to_save, 'RcvData')) = [];
-        end
 
         % save options
         save_options = {};
@@ -287,10 +267,6 @@ function varargout = saveDataMenu(varargin)
         % call save in base workspace
         call_save_mat(out_path, vars_to_save, save_options);
 
-        if rf_to_bin
-            % call bin save in base workspace
-            call_save_bin(out_path);
-        end
 
         % save figures if requested
         if state.checkboxes.figfig || state.checkboxes.figpng
@@ -321,29 +297,6 @@ function varargout = saveDataMenu(varargin)
         saveStr = ['save(''' save_path ''', ' varStr(1:end - 1) ');'];
         disp(saveStr)
         evalin('base', saveStr);
-    end
-
-    function call_save_bin(save_path)
-        RcvData = evalin('base', 'RcvData');
-        for k = 1:numel(RcvData)
-            % FIXME: how to handle continuous buffers? / Asynchronous buffers?
-            % if Pm(k).isContinuousFUS
-            %     fprintf('Skipping RcvData{%i} since its the continuous buffer\n', k);
-            %     continue;
-            % end
-            save_path_rf = [save_path(1:end - 4) sprintf('_RcvData%0i.bin', k)];
-
-            % check  if need reorder or not. (save disk space)
-            % Trans = evalin('base', 'Trans');
-            % ConnectorNeedOrder = ~all(Trans.Connector(:).' == 1:Trans.numelements);
-            
-            %if ConnectorNeedOrder
-            %    Connector = Trans.Connector;
-            %    MLSaveFast(save_path_rf, RcvData{k}, Connector);
-            %else
-                MLSaveFast(save_path_rf, RcvData{k});
-            %end
-        end
     end
 
     function vars_to_save = get_vars_to_save()
