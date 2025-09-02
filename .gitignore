@@ -5,4 +5,5 @@
 *.jpg
 *.jpeg
 
+!doc/img/*.png
 dependencies/dev/
