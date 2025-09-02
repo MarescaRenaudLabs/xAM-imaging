@@ -1,7 +1,7 @@
 % Cross-Amplitude Modulation (xAM) Ultrasound Imaging
 %
 % This script implements the xAM imaging paradigm for artifact-free detection
-% of gas vesicles (GVs) in vivo. By transmitting cross-propagating plane waves,
+% of gas vesicles (GVs). By transmitting cross-propagating plane waves,
 % xAM suppresses nonlinear propagation artifacts while preserving nonlinear
 % contrast from GVs, as described in:
 %

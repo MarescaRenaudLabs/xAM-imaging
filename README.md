@@ -1,17 +1,16 @@
-# NAME
+# xAM-imaging
+
+Repository containing script that implements the xAM imaging sequence for
+artifact-free detection of gas vesicles (GVs). By transmitting cross-propagating
+plane waves, xAM suppresses nonlinear propagation artifacts while preserving
+nonlinear contrast from GVs. 
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Made with MATLAB](https://img.shields.io/badge/MATLAB-R2021b-orange.svg)]()
+[![Vantage](https://img.shields.io/badge/Vantage-4.8.6+-blue.svg)]()
+
 
 ## How to use
-
-<!-- Make sure Verasonics Vantage is active, navigate in Matlab to the Vantage
-folder, e.g.
-
-    >> cd C:\Users\verasonics\Documents\Vantage-X.Y.Z
-
-and run activate:
-
-    >> activate
-
-### Imaging  -->
 
 ### 1. Parameter Review
 
@@ -30,16 +29,13 @@ P.save_path = 'data';           % default path for data saving
 Other parameters that can be configured are described below. 
 
 ### 2. Launch imaging sequence
-Run the script to start the sequence. The VSX GUI will pop up.
+Run the script `xAM_imaging.m` to start imaging. The VSX GUI will pop up.
 
 ![VSX gui](doc/img/vsx_gui.png)
 
 When it is safe, if the ultrasound transducer is in contact with the phantom,
-water or other, press the button "Start Sequence". 
-
-
-
-
+water or other, press the button "Start Sequence". Next, xAM data will be acquired
+continuously and displayed on screen, side by side with a B-mode image. 
 
 
 
@@ -58,7 +54,7 @@ water or other, press the button "Start Sequence".
 | `fps`                  | Acquisition frame rate \[Hz]                                                             |
 | `save_path`            | Default path for saving data                                                             |
 
-#### Advanced options
+### Advanced options
 
 | Name                       | Description                                                                     |
 | -------------------------- | ------------------------------------------------------------------------------- |
@@ -67,22 +63,21 @@ water or other, press the button "Start Sequence".
 | `use_half_pitch_scanning`  | Enables half-pitch scanning for finer sampling                                  |
 | `transmit_frequency`       | Transducer transmit frequency \[MHz]                                            |
 
-#### Dependent parameters
-Parameters that depend on parameters defined above. 
+### Notes
 
-| `half_aperture_size`       | Half of the number of active elements in transmit aperture                         |
-| `ray_positions`            | Transmit ray locations expressed in element
-indices used for scanning. If `use_half_pitch_scanning = true`, half indices are
-in between neighouring elements.  |
-| `ray_positions_mm`         | Physical positions \[mm] of transmit rays in
-element coordinates  |
+- Tested on MATLAB R2021b on Windows 10, with Verasonics Vantage-4.8.6. 
+- You require a Verasonics host PC with GPU, since the sequence uses a GPU
+accelerated beamformer. 
 
+## Feedback, Feature Requests, and Bug Reports
 
+We welcome contributions from users and developers!  
+- **Found a bug?** Please open an [issue](../../issues) with a clear description and steps to reproduce.  
+- **Have a feature request?** Open an [issue](../../issues) and label it as `enhancement`.  
+- **General feedback or suggestions?** Use the [feedback template](../../issues/new/choose) to share your thoughts.  
 
+Your input helps improve this repository and guide future development.
 
-
-## Other information
-Tested on MATLAB R2021b on Windows 10, with Verasonics Vantage-4.8.6. 
 
 ## References to be cited 
 
@@ -94,10 +89,6 @@ Tested on MATLAB R2021b on Windows 10, with Verasonics Vantage-4.8.6.
   of wavefront shape on nonlinear ultrasound imaging of monodisperse
   microbubbles. Physical Review Applied, 22(3), 034062, DOI: [10.1103/PhysRevX.8.041002](https://doi.org/10.1103/PhysRevApplied.22.034062)
 
-
-
-## License
-TBD
 
 ## Disclaimer
 This software is provided by the authors and contributors "as is" and any express or implied warranties, including, but not limited to, the implied warranties of merchantability and fitness for a particular purpose are disclaimed. In no event shall the authors and contributors be liable for any direct, indirect, incidental, special, exemplary, or consequential damages (including, but not limited to, procurement of substitute goods or services; loss of use, data, or profits; or business interruption) however caused and on any theory of liability, whether in contract, strict liability, or tort (including negligence or otherwise) arising in any way out of the use of this software, even if advised of the possibility of such damage.
