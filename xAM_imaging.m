@@ -1,17 +1,55 @@
-% Description:
-%   L22-14v(X) Linear array
-%   xWave wide field of view script with constant depth
-%   96 ray transmits and 96 receive acquisitions
-%   128 receive channels are active for each acquisition of the 96 transmits
-%   62.5 MHz sampling for a 15.625 MHz processing center frequency
+% Cross-Amplitude Modulation (xAM) Ultrasound Imaging
 %
-%   Dual mode, and continuous
+% This script implements the xAM imaging paradigm for artifact-free detection
+% of gas vesicles (GVs) in vivo. By transmitting cross-propagating plane waves,
+% xAM suppresses nonlinear propagation artifacts while preserving nonlinear
+% contrast from GVs, as described in:
 %
-% Last update:
-%   03/11/2023 - Rick Waasdorp (r.waasdorp@tudelft.nl) (Beamforming xBmode)
-%   25/03/2022 - Baptiste Heiles (Angles)
+%   Maresca et al., "Nonlinear Ultrasound Imaging of Nanoscale Acoustic Biomolecules"
+%   Phys. Rev. X 8, 041002 (2018). DOI: 10.1103/PhysRevX.8.041002
+%
+% Authors:
+%   Rick Waasdorp (r.waasdorp@tudelft.nl)
+%   David Maresca (d.maresca@tudelft.nl)
+%
+% -------------------------------------------------------------------------
+% Parameter Reference (struct P)
+% -------------------------------------------------------------------------
+%
+% Basic parameters:
+%   P.image_start_depth_mm   : Start depth of imaging region [mm]
+%   P.image_end_depth_mm     : End depth of imaging region [mm]
+%   P.xwave_angles           : xWave angle [degrees]
+%   P.speed_of_sound         : Speed of sound in medium
+%                               (1480 m/s in water/agar, 1540 m/s in tissue)
+%   P.image_voltage          : Transmit voltage [V]. Set safely to avoid GV collapse
+%   P.aperture_size_min      : Minimum number of elements in active aperture
+%                               (e.g. 48 for wide FOV)
+%   P.aperture_size_max      : Maximum number of elements in active aperture
+%   P.transmit_apodization   : Apodization function to reduce edge waves.
+%                               Options: 'none', 'kaiser', 'hamming', 'tukey'
+%   P.fps                    : Acquisition frame rate [Hz]
+%   P.save_path              : Default path for saving data
+%
+% Advanced options:
+%   P.num_accumulations      : Number of RF accumulations. Increases SNR but
+%                               lowers FPS and may cause clipping
+%   P.use_adaptive_xwave_angle : If true, xWave angles are adapted based on max
+%                                 requested imaging depth
+%   P.use_half_pitch_scanning  : Enables half-pitch scanning for finer sampling,
+%                                 at cost of max frame rate.
+%   P.transmit_frequency       : Transducer transmit frequency [MHz]
+%
+% Dependent parameters (computed from above):
+%   P.half_aperture_size     : Half the number of active elements in transmit aperture
+%   P.ray_positions          : Transmit ray locations (element indices).
+%                               With half-pitch scanning enabled, indices fall
+%                               between neighboring elements.
+%   P.ray_positions_mm       : Physical positions [mm] of transmit rays in element coordinates
+%
+% =========================================================================
 
-clear all %#ok<CLALL> 
+clear all %#ok<CLALL>
 format compact
 close all
 
@@ -25,6 +63,8 @@ addpath('dependencies/utilities/save')
 %% =============================================================================
 % SETUP ACQUISITION PARAMETERS
 % ==============================================================================
+Trans.name = 'L22-14vX'; % tested transducers are L22-14vX / L11-5v
+
 P.image_start_depth_mm = 0; % start depth [mm]
 P.image_end_depth_mm = 10; % end depth [mm]
 
@@ -36,21 +76,16 @@ P.image_voltage = 2.5; % set to safe number to avoid collapse
 P.aperture_size_min = 48; % min number of elements in active aperture (48 for wide FOV)
 P.aperture_size_max = 64; % max number of elements in active aperture
 
-P.transmit_apodization = 'none'; % Apodization to avoid edge waves. Options: none/kaiser/hamming/tukey
+P.transmit_apodization = 'tukey'; % Apodization to avoid edge waves. Options: none/kaiser/hamming/tukey
 P.fps = 2; % acquisition frame rate in [Hz]
 
 P.save_path = 'data'; % default path for data saving
-
-
-
 
 %% =============================================================================
 % TRANSDUCER PARAMETERS
 % ==============================================================================
 
 % Define Trans structure array
-Trans.name = 'L22-14vX';
-% Trans.name = 'L11-5v';
 Trans.units = 'mm';
 Trans = computeTrans(Trans);
 
@@ -73,7 +108,7 @@ Resource.Parameters.waitForProcessing = 1;
 % Advanced options
 P.num_accumulations = 1; % if >1, will accumulate RF data on the device. Keep low to avoid clipping! Lowers max FPS!
 P.use_adaptive_xwave_angle = true; % if true updates the xWave Angles dependent on the  imaging depth
-P.use_half_pitch_scanning = true; 
+P.use_half_pitch_scanning = true;
 P.transmit_frequency = Trans.frequency; % transducer transmit frequency [MHz]
 
 P.num_pulses = 3; % number of pulses in xAM pulse sequence, hardcoded
@@ -85,7 +120,7 @@ P.beamform_image_modes = {'PW', 'xAM'}; % PW = bf(\)+bf(/), xBmode = bf(X), xAM 
 step = 1 / (P.use_half_pitch_scanning + 1);
 P.half_aperture_size = (P.aperture_size_min - rem(P.aperture_size_min, 2)) / 2; % number of active elements in half transmit aperture
 P.ray_positions = ceil(P.aperture_size_min / 2) + 1:step:Resource.Parameters.numTransmit - floor(P.aperture_size_min / 2); % pitch scanning
-P.ray_positions_mm = interp1(1:Trans.numelements, Trans.ElementPos(:,1), P.ray_positions);
+P.ray_positions_mm = interp1(1:Trans.numelements, Trans.ElementPos(:, 1), P.ray_positions);
 P.num_rays = numel(P.ray_positions);
 
 % warn user about max angle used
@@ -112,7 +147,6 @@ Media.function = 'movePoints';
 assert(P.image_end_depth_mm >= P.image_start_depth_mm, 'Image end depth must be larger than start depth. Recommended start = 0, end = 10mm')
 assert(P.aperture_size_min < P.aperture_size_max, 'Min aperture size must be smaller than max aperture size. Recommended min = 33, max = 64')
 
-
 %% =============================================================================
 % RESOURE BUFFERS
 % ==============================================================================
@@ -121,7 +155,7 @@ assert(P.aperture_size_min < P.aperture_size_max, 'Min aperture size must be sma
 TxFreq = 250 ./ (2 .* ((6:197).'));
 TxFreqValid = TxFreq(2 .* TxFreq < 3.5 & TxFreq > 1.5); % depends on Trans.Bandwidth [1.5 3.5] for P4-1
 demodFreqsValid = TxFreq(rem(250, TxFreq * 4) == 0);
-[~,idx] = min(abs(Trans.frequency - demodFreqsValid));
+[~, idx] = min(abs(Trans.frequency - demodFreqsValid));
 demodFrequency = demodFreqsValid(idx);
 % fprintf('\tTX    FREQ: %.3f MHz\n', Trans.frequency)
 % fprintf('\tDEMOD FREQ: %.3f MHz\n', demodFrequency)
@@ -543,7 +577,7 @@ UI(n_ui).Control = {'UserC8', 'Style', 'VsSlider', 'Label', 'DR B-Mode', ...
 UI(n_ui).Callback = {'xw_change_dr(''bmode'', UIValue)'};
 n_ui = n_ui + 1;
 
-UISTATES.dr_xam= 20; % dynamic range minimum
+UISTATES.dr_xam = 20; % dynamic range minimum
 UI(n_ui).Control = {'UserC7', 'Style', 'VsSlider', 'Label', 'DR xAM', ...
                         'SliderMinMaxVal', [0, 30, UISTATES.dr_xam], ...
                         'SliderStep', [0.01, 0.1], 'ValueFormat', '%2.1fdB'};
@@ -555,7 +589,7 @@ UI(n_ui).Callback = {'saveDataMenu()'};
 n_ui = n_ui + 1;
 
 % configure saveDataMenu
-P.matfile_file_name = 'xWaveImaging.mat'; filename = P.matfile_file_name;
+P.matfile_file_name = 'xAM_imaging.mat'; filename = P.matfile_file_name;
 SaveDataMenuSettings = saveDataMenu('defaults'); % call with 1 output arg and one input arg to obtain defaults
 SaveDataMenuSettings.filename = P.matfile_file_name;
 SaveDataMenuSettings.custom_figures = {2};

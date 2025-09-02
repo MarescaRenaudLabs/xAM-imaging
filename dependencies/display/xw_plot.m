@@ -5,7 +5,7 @@ function xw_plot(P, BFData)
         BFData = evalin('base', 'BFData');
     end
 
-    UISTATES = evalin('base', 'UISTATES');
+    UISTATES = evalin_if_exist('base', 'UISTATES', struct('dr_xam', 25, 'dr_bmode', 40));
 
     modes = fieldnames(BFData); % since TimeTag is in there
     modes(contains(modes, 'TimeTag')) = [];
@@ -15,7 +15,7 @@ function xw_plot(P, BFData)
     
 
     persistent f ax imgh modes_prev time_tag_array fps_tit
-    if isempty(f) || ~isvalid(f) || ~isequal(modes_prev, modes)
+    if isempty(f) || ~isvalid(f) || ~isvalid(ax(1)) ||  ~isequal(modes_prev, modes)
         % handle persistent variables
         modes_prev = modes;
         time_tag_array = NaN(10, 1);
