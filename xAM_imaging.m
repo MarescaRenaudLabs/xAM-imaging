@@ -36,7 +36,7 @@ P.image_voltage = 2.5; % set to safe number to avoid collapse
 P.aperture_size_min = 48; % min number of elements in active aperture (48 for wide FOV)
 P.aperture_size_max = 64; % max number of elements in active aperture
 
-P.transmit_apodization = 'tukey'; % Apodization to avoid edge waves. Options: none/kaiser/hamming/tukey
+P.transmit_apodization = 'none'; % Apodization to avoid edge waves. Options: none/kaiser/hamming/tukey
 P.fps = 2; % acquisition frame rate in [Hz]
 
 P.save_path = 'data'; % default path for data saving
@@ -536,18 +536,18 @@ UI(n_ui).Control = {'UserB6', 'Style', 'VsSlider', 'Label', 'Persistence', ...
 UI(n_ui).Callback = {'xw_change_persistence(UIValue)'};
 n_ui = n_ui + 1;
 
-UISTATES.dr_max = 0; % dynamic range minimum
-UI(n_ui).Control = {'UserC8', 'Style', 'VsSlider', 'Label', 'Dyn. Range Max', ...
-                        'SliderMinMaxVal', [-18, 0, UISTATES.dr_max], ...
+UISTATES.dr_bmode = 40; % dynamic range B-mode
+UI(n_ui).Control = {'UserC8', 'Style', 'VsSlider', 'Label', 'DR B-Mode', ...
+                        'SliderMinMaxVal', [0, 60, UISTATES.dr_bmode], ...
                         'SliderStep', [0.01, 0.1], 'ValueFormat', '%2.1fdB'};
-UI(n_ui).Callback = {'xw_change_dr_max(UIValue)'};
+UI(n_ui).Callback = {'xw_change_dr(''bmode'', UIValue)'};
 n_ui = n_ui + 1;
 
-UISTATES.dr_min = -40; % dynamic range minimum
-UI(n_ui).Control = {'UserC7', 'Style', 'VsSlider', 'Label', 'Dyn. Range Min', ...
-                        'SliderMinMaxVal', [-60, -22, UISTATES.dr_min], ...
+UISTATES.dr_xam= 20; % dynamic range minimum
+UI(n_ui).Control = {'UserC7', 'Style', 'VsSlider', 'Label', 'DR xAM', ...
+                        'SliderMinMaxVal', [0, 30, UISTATES.dr_xam], ...
                         'SliderStep', [0.01, 0.1], 'ValueFormat', '%2.1fdB'};
-UI(n_ui).Callback = {'xw_change_dr_min(UIValue)'};
+UI(n_ui).Callback = {'xw_change_dr(''xam'', UIValue)'};
 n_ui = n_ui + 1;
 
 % button to save data
@@ -587,5 +587,4 @@ addpath('MatFiles')
 save(['MatFiles/', P.matfile_file_name]);
 
 % Automatically Launch Verasonics
-
 VSX
