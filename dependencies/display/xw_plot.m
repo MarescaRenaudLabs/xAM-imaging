@@ -32,14 +32,19 @@ function xw_plot(P, BFData)
 
             ax(k) = subplot(nrows, ncols, k);
             imgh(k) = imagesc(P.x_axis * 1e3, P.z_axis * 1e3, img_data, CLIM);
-            hold on 
+
+            xlabel('Lateral position [mm]')
+            ylabel('Depth [mm]')
+
+            hold on
             max_img_depth_per_ray = min(P.ray_max_image_depth, [], 1);
-            plot(P.ray_positions_mm, max_img_depth_per_ray*1e3, 'w--')
+            plot(P.ray_positions_mm, max_img_depth_per_ray * 1e3, 'w--')
 
             colorbar
             daspect([1 1 1])
             colormap bone
-            title(strrep(mode, '_', ' '))
+            mode_str = strrep(mode, 'PW', 'BMode');
+            title(strrep(mode_str, '_', ' '))
         end
         % linkaxes(ax,'xy'); % optional, slow
         fps_tit = sgtitle(sprintf('Frame rate: %i fps', nan));

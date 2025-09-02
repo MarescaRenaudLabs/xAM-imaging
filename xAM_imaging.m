@@ -28,19 +28,20 @@ addpath('dependencies/utilities/save')
 P.image_start_depth_mm = 0; % start depth [mm]
 P.image_end_depth_mm = 10; % end depth [mm]
 
-P.num_accumulations = 1; % if >1, will accumulate RF data on the device. Keep low to avoid clipping! Lowers max FPS!
-P.xwave_angles = [7.5 15.5]; % Ensemble of xWave angles in degrees, one or multiple angles
+P.xwave_angles = 17; % xWave angle in degrees
 
 P.speed_of_sound = 1480; % agar/water 1480 m/s, tissue 1540 m/s
 P.image_voltage = 2.5; % set to safe number to avoid collapse
 
-P.aperture_size_min = 33; % min number of elements in active aperture (33 for wide FOV)
+P.aperture_size_min = 48; % min number of elements in active aperture (48 for wide FOV)
 P.aperture_size_max = 64; % max number of elements in active aperture
-
-P.save_path = 'data'; % default path for data saving
 
 P.transmit_apodization = 'tukey'; % Apodization to avoid edge waves. Options: none/kaiser/hamming/tukey
 P.fps = 2; % acquisition frame rate in [Hz]
+
+P.save_path = 'data'; % default path for data saving
+
+
 
 
 %% =============================================================================
@@ -70,14 +71,15 @@ Resource.Parameters.waitForProcessing = 1;
 % Compute and set dependent parameters
 
 % Advanced options
+P.num_accumulations = 1; % if >1, will accumulate RF data on the device. Keep low to avoid clipping! Lowers max FPS!
 P.use_adaptive_xwave_angle = true; % if true updates the xWave Angles dependent on the  imaging depth
-P.use_half_pitch_scanning = true; %
+P.use_half_pitch_scanning = true; 
 P.transmit_frequency = Trans.frequency; % transducer transmit frequency [MHz]
 
 P.num_pulses = 3; % number of pulses in xAM pulse sequence, hardcoded
 P.timetag_enabled = 1; % debug option, see time tags of frames
 P.num_rf_frames = 4; % must be >4 or even number, don't change
-P.beamform_image_modes = {'PW', 'xBmode', 'xAM'}; % PW = bf(\)+bf(/), xBmode = bf(X), xAM = bf(X-\-/)
+P.beamform_image_modes = {'PW', 'xAM'}; % PW = bf(\)+bf(/), xBmode = bf(X), xAM = bf(X-\-/)
 
 % choose rays for pitch or pitch/2 scanning
 step = 1 / (P.use_half_pitch_scanning + 1);
@@ -585,4 +587,5 @@ addpath('MatFiles')
 save(['MatFiles/', P.matfile_file_name]);
 
 % Automatically Launch Verasonics
+
 VSX
