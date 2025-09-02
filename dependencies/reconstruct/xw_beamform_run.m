@@ -39,7 +39,7 @@ function BFData = xw_beamform_run(RFData)
     %z_min =  (P.aperture_size_min - 1) * param.p / 2 * sind(max(P.ray_angle(:))); % [m]
     z_min = P.image_start_depth_mm * 1e-3;
     z_max = P.image_end_depth_mm * 1e-3;
-    z_vector = z_min:param.lambda / 4:z_max; % depth axis [m]
+    z_vector = z_min:param.lambda / 2:z_max; % depth axis [m]
     P.x_axis = interp1(1:Trans.numelements, Trans.ElementPos(:, 1), P.ray_positions) * 1e-3;
     P.z_axis = z_vector;
 

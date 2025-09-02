@@ -1,5 +1,7 @@
+% =========================================================================
 % Cross-Amplitude Modulation (xAM) Ultrasound Imaging
-%
+% =========================================================================
+% 
 % This script implements the xAM imaging paradigm for artifact-free detection
 % of gas vesicles (GVs). By transmitting cross-propagating plane waves,
 % xAM suppresses nonlinear propagation artifacts while preserving nonlinear
@@ -46,6 +48,20 @@
 %                               With half-pitch scanning enabled, indices fall
 %                               between neighboring elements.
 %   P.ray_positions_mm       : Physical positions [mm] of transmit rays in element coordinates
+%
+% -------------------------------------------------------------------------
+% Output Data (struct BFData)
+% -------------------------------------------------------------------------
+% Data is beamformed on a fixed image grid of P.x_axis and P.z_axis. 
+% After beamforming, data is returned in the struct BFData with fields:
+%
+%   BFData.PW       : B-mode image (complex IQ) reconstructed from plane-wave
+%                     data [pixels: depth × lateral]
+%
+%   BFData.xAM      : xAM image (complex IQ) highlighting GV-specific contrast
+%                     [pixels: depth × lateral]
+%   
+%   BFData.TimeTag  : Time stamp of recorded data (numeric)
 %
 % =========================================================================
 
