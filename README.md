@@ -37,7 +37,17 @@ When it is safe, if the ultrasound transducer is in contact with the phantom,
 water or other, press the button "Start Sequence". Next, xAM data will be acquired
 continuously and displayed on screen, side by side with a B-mode image. 
 
+### GUI Controls
 
+| Control               | Description |
+|-----------------------|-------------|
+| **Start Seq.**        | Starts the imaging sequence. After launching the script, the GUI window opens (if parameters are valid). When the transducer is in contact with the imaging medium, press **Start Seq.** to unpause the hardware and begin continuous acquisition. |
+| **Freeze/Unfreeze**   | Pauses or resumes the sequence. Only works after the sequence has been started with **Start Seq.** |
+| **Save Data**         | Opens the save menu to set path and filename. Requires the sequence to be frozen before saving; the current on-screen image will then be saved. |
+| **Imaging Voltage**   | Controls the transmit voltage. Start with a low voltage to avoid collapsing gas vesicles. At too low voltages, nonlinear signal in the xAM images may not appear since the GV buckling threshold is not reached. Slowly increase the voltage until nonlinear signal is observed. |
+| **Persistence**       | Controls image persistence by blending new frames with previous ones. **1.0 = only new frame (no persistence)**, **0.0 = only old frame**. Intermediate values apply a moving average for smoother, more stable images. |
+| **Dynamic Range B-mode** | Adjusts the dynamic range used for display of the B-mode image. |
+| **Dynamic Range xAM** | Adjusts the dynamic range used for display of the xAM image. |
 
 ### Parameter Reference
 
