@@ -1,7 +1,7 @@
 % =========================================================================
 % Cross-Amplitude Modulation (xAM) Ultrasound Imaging
 % =========================================================================
-% 
+%
 % This script implements the xAM imaging paradigm for artifact-free detection
 % of gas vesicles (GVs). By transmitting cross-propagating plane waves,
 % xAM suppresses nonlinear propagation artifacts while preserving nonlinear
@@ -52,7 +52,7 @@
 % -------------------------------------------------------------------------
 % Output Data (struct BFData)
 % -------------------------------------------------------------------------
-% Data is beamformed on a fixed image grid of P.x_axis and P.z_axis. 
+% Data is beamformed on a fixed image grid of P.x_axis and P.z_axis.
 % After beamforming, data is returned in the struct BFData with fields:
 %
 %   BFData.PW       : B-mode image (complex IQ) reconstructed from plane-wave
@@ -60,7 +60,7 @@
 %
 %   BFData.xAM      : xAM image (complex IQ) highlighting GV-specific contrast
 %                     [pixels: depth × lateral]
-%   
+%
 %   BFData.TimeTag  : Time stamp of recorded data (numeric)
 %
 % =========================================================================
@@ -104,13 +104,17 @@ P.save_path = 'data'; % default path for data saving
 % Define Trans structure array
 Trans.units = 'mm';
 Trans = computeTrans(Trans);
+Trans = computeUTAMux64(Trans); % add the HVMux structure for the UTA 260-Mux
 
 %% =============================================================================
 % SYSTEM PARAMETERS
 % ==============================================================================
 % Define system parameters
-Resource.Parameters.numTransmit = 128; % number of transmit channels
-Resource.Parameters.numRcvChannels = 128; % number of receive channels
+Resource.Parameters.numTransmit = 64; % number of transmit channels
+Resource.Parameters.numRcvChannels = 64; % number of receive channels
+Resource.System.UTA = '260-MUX'; % for Vantage 64
+assert(P.aperture_size_max <= Resource.Parameters.numTransmit, 'Max aperture size must be <= %d', Resource.Parameters.numTransmit)
+
 Resource.Parameters.speedOfSound = P.speed_of_sound; % speed of sound [m/s]
 Resource.Parameters.verbose = 1; % controls output warnings
 Resource.Parameters.speedCorrectionFactor = 1.0;
@@ -135,7 +139,7 @@ P.beamform_image_modes = {'PW', 'xAM'}; % PW = bf(\)+bf(/), xBmode = bf(X), xAM 
 % choose rays for pitch or pitch/2 scanning
 step = 1 / (P.use_half_pitch_scanning + 1);
 P.half_aperture_size = (P.aperture_size_min - rem(P.aperture_size_min, 2)) / 2; % number of active elements in half transmit aperture
-P.ray_positions = ceil(P.aperture_size_min / 2) + 1:step:Resource.Parameters.numTransmit - floor(P.aperture_size_min / 2); % pitch scanning
+P.ray_positions = ceil(P.aperture_size_min / 2) + 1:step:Trans.numelements - floor(P.aperture_size_min / 2); % pitch scanning
 P.ray_positions_mm = interp1(1:Trans.numelements, Trans.ElementPos(:, 1), P.ray_positions);
 P.num_rays = numel(P.ray_positions);
 
@@ -146,7 +150,7 @@ if P.use_adaptive_xwave_angle
         warning('Imaging depth too high for combination of angles. Max depth of intersecting xWave is %.2fmm. Either\n - Decrease imaging depth\n - Set P.use_adaptive_xwave_angle to false\n - Dont trust xAM results below %.2fmm\n - Decrease the max angle', P.max_image_depth * 1e3, P.max_image_depth * 1e3)
     end
 end
-assert(P.num_rf_frames >= 4, 'num_rf_frames must be larger than 4');
+% assert(P.num_rf_frames >= 4, 'num_rf_frames must be larger than 4');
 
 % some additional dependent parameters
 P.scale_wvl2mm = (Resource.Parameters.speedOfSound / Trans.frequency) * 1e-3; % length of 1 wavelength in mm
@@ -173,8 +177,8 @@ TxFreqValid = TxFreq(2 .* TxFreq < 3.5 & TxFreq > 1.5); % depends on Trans.Bandw
 demodFreqsValid = TxFreq(rem(250, TxFreq * 4) == 0);
 [~, idx] = min(abs(Trans.frequency - demodFreqsValid));
 demodFrequency = demodFreqsValid(idx);
-% fprintf('\tTX    FREQ: %.3f MHz\n', Trans.frequency)
-% fprintf('\tDEMOD FREQ: %.3f MHz\n', demodFrequency)
+fprintf('\tTX    FREQ: %.3f MHz\n', Trans.frequency)
+fprintf('\tDEMOD FREQ: %.3f MHz\n', demodFrequency)
 
 maxAcqLength = ceil(sqrt(P.image_end_depth_mm ^ 2 + ((Trans.numelements - 1) * Trans.spacingMm) ^ 2)); % [mm]
 maxAcqLengthWvl = maxAcqLength * P.scale_mm2wvl;
@@ -236,6 +240,7 @@ Receive = repmat(struct('Apod', zeros(1, Trans.numelements), ...
 % Set event specific Receive and TX attributes.
 % Compute transmit delays
 P.ray_angle = zeros(P.num_angles, P.num_rays); % xWave angles per ray
+rx_apods_debug = zeros(P.num_rays, Trans.numelements);
 for idx_ray = 1:P.num_rays
     for idx_angle = 1:P.num_angles
         idx_tx = idx_angle + (idx_ray - 1) * P.num_angles;
@@ -248,7 +253,15 @@ for idx_ray = 1:P.num_rays
                 Receive(idx).callMediaFunc = 1; % 1 for all 3 pulses
             end
 
-            Receive(idx).Apod(:) = 1.0; % activate all elements
+            % Vantage 64, make largest receive aperture centered around ray
+            apod = zeros(1, Trans.numelements);
+            istart = ceil(P.ray_positions(idx_ray) - P.ray_half_aperture(idx_angle, idx_ray));
+            iend = floor(P.ray_positions(idx_ray) + P.ray_half_aperture(idx_angle, idx_ray));
+            if iend - istart >= 64; iend = iend - 1; end
+            apod(istart:iend) = 1.0;
+            rx_apods_debug(idx_ray, :) = apod;
+
+            Receive(idx).Apod = apod; % activate all elements
             Receive(idx).mode = 0;
             Receive(idx).framenum = idx_frame;
             Receive(idx).acqNum = idx_angle + (idx_ray - 1) * P.num_angles; % for X pulse
@@ -267,7 +280,7 @@ for idx_ray = 1:P.num_rays
                 idx = idx_angle + (idx_ray - 1) * P.num_angles + (idx_frame - 1) * nRcvObj_p_accum + nRcvObj_p_accum * P.num_rf_frames;
 
                 Receive(idx).mode = 1; % activate all elements
-                Receive(idx).Apod(:) = 1.0; % activate all elements
+                Receive(idx).Apod = apod; % activate all elements
                 Receive(idx).framenum = idx_frame;
                 Receive(idx).acqNum = idx_angle + (idx_ray - 1) * P.num_angles; % for X pulse
 
@@ -284,6 +297,44 @@ for idx_ray = 1:P.num_rays
         end
     end
 end
+
+% set mux apertures for Vantage 64
+for k = 1:P.num_rays
+    TX(k + 0 * P.num_rays).aperture = computeMuxAperture(TX(k).Apod, Trans);
+    TX(k + 1 * P.num_rays).aperture = computeMuxAperture(TX(k).Apod, Trans);
+    TX(k + 2 * P.num_rays).aperture = computeMuxAperture(TX(k).Apod, Trans);
+end
+
+for k = 1:numel(Receive)
+    Receive(k).aperture = computeMuxAperture(Receive(k).Apod, Trans);
+end
+
+% %% debug aperture
+% figure(1); clf;
+% plot([TX.aperture])
+% figure(2); clf;
+% plot(diff([TX.aperture]))
+%
+% tx_apod = reshape([TX.Apod], Trans.numelements, []).';
+%
+% figure(3);
+% imagesc(tx_apod)
+%
+% %%
+%
+%
+% rx_apod = reshape([Receive.Apod], Trans.numelements, []).';
+%
+% figure(4); clf;
+% imagesc(rx_apod)
+% % imagesc(rx_apods_debug)
+%
+% return
+
+%%
+% k= 1;
+% mux = Trans.HVMux.ApertureES;
+% mux(:, TX(k).aperture)
 
 %% =============================================================================
 % TIME GAIN CONTROL

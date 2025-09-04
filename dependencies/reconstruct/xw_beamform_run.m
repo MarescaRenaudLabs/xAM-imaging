@@ -34,7 +34,7 @@ function BFData = xw_beamform_run(RFData)
 
     % look at time tag:
     TimeTag = TimeTag2Sec(RFData(1:2, 1));
-  
+
     % define min and max image depth and set z vector
     %z_min =  (P.aperture_size_min - 1) * param.p / 2 * sind(max(P.ray_angle(:))); % [m]
     z_min = P.image_start_depth_mm * 1e-3;
@@ -48,9 +48,23 @@ function BFData = xw_beamform_run(RFData)
     ntot = (Nz_RF * P.num_rays * P.num_angles);
     inds = 1:ntot;
     NFrames = size(RFData, 3);
-    RFStruct.PW_L = RFData(inds + 1 * ntot, :, :);
-    RFStruct.PW_R = RFData(inds + 2 * ntot, :, :);
-    RFStruct.XW = RFData(inds + 0 * ntot, :, :);
+
+    % for vantage 64, unpack 64 channel RF data to 128 channels for beamformer compatibility
+    RFData_unpack = zeros(size(RFData, 1), Trans.numelements, NFrames, 'int16');
+    for rx = 1:P.num_rays * P.num_angles * P.num_pulses
+        s1 = Receive(rx).startSample;
+        s2 = Receive(rx).endSample;
+        aper_idx = Receive(rx).aperture;
+        aper = Trans.HVMux.ApertureES(:, aper_idx);
+        % fprintf('RX%03i >> % 6i:% 6i - %03i\n', k, s1, s2, aper_idx)
+        dst = aper(aper ~= 0);
+        src = mod(dst - 1, 64) + 1;
+        RFData_unpack(s1:s2, dst, :) = RFData(s1:s2, src, :);
+    end
+
+    RFStruct.PW_L = RFData_unpack(inds + 1 * ntot, :, :);
+    RFStruct.PW_R = RFData_unpack(inds + 2 * ntot, :, :);
+    RFStruct.XW = RFData_unpack(inds + 0 * ntot, :, :);
 
     if NFrames > 1
         RFStruct.PW_L = reshaper3to2D(RFStruct.PW_L);
@@ -128,38 +142,6 @@ function BFData = xw_beamform_run(RFData)
     assignin('base', 'LUTStruct', LUTStruct)
     assignin('base', 'P', P);
     assignin('base', 'BFC', BFC);
+    % assignin('base', 'RFStruct', RFStruct);
 
-end
-
-function BFC = createEmptyBFConfig(P)
-    BFC.NFrames = 0;
-    BFC.NAngles = 0;
-    BFC.NTx = 0;
-    BFC.Nx = 0;
-    BFC.Nz = 0;
-    BFC.IQdemod = 0;
-    BFC.IQ_demodFreq = 0;
-    BFC.Nz_RF = 0;
-    BFC.InterpMode = '';
-    BFC.mode = '';
-    BFC.NXPiezo = 0;
-    BFC.decimSampleRate = 0;
-
-    BFC.ScaleZ = 0;
-    BFC.ScaleX = 0;
-    BFC.fNumber = 0;
-    BFC.ptSourceZ0 = 0;
-    BFC.samplesPerWave = 0;
-    BFC.demodFrequency = 0;
-    BFC.speedOfSound = 0;
-    BFC.CorrectionForTW = 0;
-    BFC.CorrectionForLens = 0;
-    BFC.CorrectionForRcvData = 0;
-    BFC.Origin = [0; 0];
-    BFC.ZPiezo = zeros(128, 1);
-    BFC.XPiezo = zeros(128, 1);
-    BFC.Angles = zeros(P.num_rays, 1);
-    BFC.addToDelay = zeros(P.num_rays, 1);
-    BFC.ptSourceX = zeros(P.num_rays, 1);
-    BFC.ptSourceZ = zeros(P.num_rays, 1);
 end

@@ -12,10 +12,8 @@ function xw_plot(P, BFData)
     nmodes = numel(modes);
     nrows = 1; ncols = ceil(nmodes / nrows);
 
-    
-
     persistent f ax imgh modes_prev time_tag_array fps_tit
-    if isempty(f) || ~isvalid(f) || ~isvalid(ax(1)) ||  ~isequal(modes_prev, modes)
+    if isempty(f) || ~isvalid(f) || ~isvalid(ax(1)) || ~isequal(modes_prev, modes)
         % handle persistent variables
         modes_prev = modes;
         time_tag_array = NaN(10, 1);
@@ -32,7 +30,7 @@ function xw_plot(P, BFData)
 
             ax(k) = subplot(nrows, ncols, k);
             imgh(k) = imagesc(P.x_axis * 1e3, P.z_axis * 1e3, img_data);
-            
+
             if strcmp(mode, 'xAM')
                 DR = UISTATES.dr_xam;
             else
@@ -73,7 +71,7 @@ function xw_plot(P, BFData)
             mode = modes{k};
             img_data = flogc(abs(BFData.(mode)(:, :, 1))); % compress data
             imgh(k).CData = img_data;
-            
+
             % set dynamic range
             if strcmp(mode, 'xAM')
                 DR = UISTATES.dr_xam;

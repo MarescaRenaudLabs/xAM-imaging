@@ -22,8 +22,8 @@ function xw_sequence_save_acquisition_parameters()
     % and save (and set saving display)
     varStr = char(join(compose('''%s'',', string(VarsToSave))));
     saveStr = ['save(''' save_path ''', ' varStr ' ''-v7'');']; % use v7, way faster
-    disp(saveStr)
+    %disp(saveStr)
     evalin('base', saveStr);
-    fprintf('Data Saved! %s\n', save_path)
+    %fprintf('Data Saved! %s\n', save_path)
 
 end
